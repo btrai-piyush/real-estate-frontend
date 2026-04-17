@@ -1,40 +1,119 @@
 'use client';
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { accountingApi, branchApi } from "@/api/api";
+import { showAdminErrorToast, showAdminSuccessToast } from "@/app/lib/admin-toast";
 import { nunito } from "@/app/ui/fonts";
+import { useAuth } from "@/context/AuthContext";
 
-const glHeads = [
-  { id: 1, name: "A4 Size Paper A/C" },
-  { id: 2, name: "Anil Karki A/C" },
-  { id: 3, name: "Cash A/C" },
-  { id: 4, name: "Bank A/C" },
-  { id: 5, name: "Office Supplies A/C" },
-  { id: 6, name: "Rent A/C" },
-  { id: 7, name: "Salaries A/C" },
-  { id: 8, name: "Utilities A/C" },
-];
+function normalizeGLHead(raw = {}) {
+  const id = raw.id ?? raw.ledgerID ?? raw.glID ?? raw.glHeadID;
+  const name = raw.glName ?? raw.name ?? raw.ledgerName;
 
-const offices = ["Planet Multipurpose", "Head Office", "Branch A", "Branch B"];
+  if (id === undefined || id === null) {
+    return null;
+  }
+
+  return {
+    id: Number(id),
+    name: String(name || `GL ${id}`),
+  };
+}
+
+function normalizeBranch(raw = {}) {
+  const id = raw.id ?? raw.branchId ?? raw.ID;
+  const name = raw.branchName ?? raw.name ?? raw.branchCode;
+
+  if (id === undefined || id === null) {
+    return null;
+  }
+
+  return {
+    id: Number(id),
+    name: String(name || `Branch ${id}`),
+  };
+}
 
 export default function GLVoucherEntry() {
+  const { user } = useAuth();
   const today = new Date();
   const [day, setDay] = useState(String(today.getDate()).padStart(2, "0"));
   const [month, setMonth] = useState(String(today.getMonth() + 1).padStart(2, "0"));
   const [year, setYear] = useState(String(today.getFullYear()));
-  const [office, setOffice] = useState(offices[0]);
+  const [branchID, setBranchID] = useState("");
   const [txnType, setTxnType] = useState("GL Head");
 
   const [glHead, setGlHead] = useState("");
+  const [customerID, setCustomerID] = useState("");
   const [balanceType, setBalanceType] = useState("Debit");
   const [amount, setAmount] = useState("");
   const [reference, setReference] = useState("");
   const [entries, setEntries] = useState([]);
   const [saved, setSaved] = useState(false);
+  const [isLoadingOptions, setIsLoadingOptions] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [branchOptions, setBranchOptions] = useState([]);
+  const [glHeadOptions, setGlHeadOptions] = useState([]);
+  const [apiLoadError, setApiLoadError] = useState("");
   const [errors, setErrors] = useState({});
+
+  const userID = useMemo(() => {
+    const currentUserId = user?.userId ?? user?.userID ?? user?.id ?? user?.ID ?? user?.nameIdentifier;
+    return currentUserId ? String(currentUserId) : "";
+  }, [user]);
+
+  const loadOptions = useCallback(async () => {
+    setIsLoadingOptions(true);
+    setApiLoadError("");
+
+    try {
+      const [headsPayload, branchesPayload] = await Promise.all([
+        accountingApi.getGLHeads(),
+        branchApi.getBranches(),
+      ]);
+
+      const branchRows = Array.isArray(branchesPayload)
+        ? branchesPayload
+        : Array.isArray(branchesPayload?.data)
+          ? branchesPayload.data
+          : Array.isArray(branchesPayload?.items)
+            ? branchesPayload.items
+            : [];
+
+      const normalizedHeads = (Array.isArray(headsPayload) ? headsPayload : [])
+        .map(normalizeGLHead)
+        .filter(Boolean);
+      const normalizedBranches = branchRows
+        .map(normalizeBranch)
+        .filter(Boolean);
+
+      setGlHeadOptions(normalizedHeads);
+      setBranchOptions(normalizedBranches);
+
+      setBranchID((previous) => {
+        if (previous && normalizedBranches.some((branch) => String(branch.id) === String(previous))) {
+          return previous;
+        }
+
+        return normalizedBranches.length > 0 ? String(normalizedBranches[0].id) : "";
+      });
+    } catch (error) {
+      setApiLoadError(error?.message || "Failed to load accounting options.");
+      setGlHeadOptions([]);
+      setBranchOptions([]);
+    } finally {
+      setIsLoadingOptions(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadOptions();
+  }, [loadOptions]);
 
   const totalDebit = entries.reduce((sum, entry) => sum + (entry.type === "Debit" ? entry.amount : 0), 0);
   const totalCredit = entries.reduce((sum, entry) => sum + (entry.type === "Credit" ? entry.amount : 0), 0);
-  const balanced = entries.length > 0 && totalDebit === totalCredit;
+  const balanceDifference = Math.abs(totalDebit - totalCredit);
+  const balanced = entries.length > 0 && balanceDifference < 0.005;
 
   const inputBase = "w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-amber-500 focus:ring-1 focus:ring-amber-500";
   const labelBase = "mb-2 block text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500";
@@ -44,9 +123,42 @@ export default function GLVoucherEntry() {
 
   function validate() {
     const nextErrors = {};
+    if (!branchID) nextErrors.branchID = "Select branch";
     if (!glHead) nextErrors.glHead = "Select a GL Head";
+    if (txnType === "Customer" && (!customerID || Number.isNaN(Number(customerID)) || Number(customerID) <= 0)) {
+      nextErrors.customerID = "Customer ID is required";
+    }
     if (!amount || Number.isNaN(Number(amount)) || Number(amount) <= 0) nextErrors.amount = "Enter valid amount";
     return nextErrors;
+  }
+
+  function buildValueDateISO() {
+    const parsedDay = Number(day);
+    const parsedMonth = Number(month);
+    const parsedYear = Number(year);
+
+    if (
+      !Number.isInteger(parsedDay) ||
+      !Number.isInteger(parsedMonth) ||
+      !Number.isInteger(parsedYear) ||
+      parsedMonth < 1 ||
+      parsedMonth > 12 ||
+      parsedDay < 1 ||
+      parsedDay > 31
+    ) {
+      return null;
+    }
+
+    const utcDate = new Date(Date.UTC(parsedYear, parsedMonth - 1, parsedDay));
+    if (
+      utcDate.getUTCFullYear() !== parsedYear ||
+      utcDate.getUTCMonth() !== parsedMonth - 1 ||
+      utcDate.getUTCDate() !== parsedDay
+    ) {
+      return null;
+    }
+
+    return utcDate.toISOString();
   }
 
   function addEntry() {
@@ -57,7 +169,7 @@ export default function GLVoucherEntry() {
     }
 
     setErrors({});
-    const head = glHeads.find((entry) => entry.id === Number(glHead));
+    const head = glHeadOptions.find((entry) => entry.id === Number(glHead));
 
     setEntries((prev) => [
       ...prev,
@@ -68,12 +180,14 @@ export default function GLVoucherEntry() {
         type: balanceType,
         amount: Number(amount),
         reference: reference.trim(),
+        customerID: txnType === "Customer" ? Number(customerID) : null,
       },
     ]);
 
     setGlHead("");
     setAmount("");
     setReference("");
+    setCustomerID("");
     setBalanceType("Debit");
   }
 
@@ -81,30 +195,75 @@ export default function GLVoucherEntry() {
     setEntries((prev) => prev.filter((entry) => entry.id !== id));
   }
 
-  function saveVoucher() {
-    if (!balanced) return;
+  async function saveVoucher() {
+    if (!balanced || isSubmitting) return;
 
-    const journal = {
-      entryDT: new Date().toISOString(),
-      valueDate: `${year}-${month}-${day}`,
-      branchID: office,
-      transactionType: txnType,
+    if (!userID) {
+      showAdminErrorToast("Unable to determine current user ID.");
+      return;
+    }
+
+    if (!branchID) {
+      setErrors((prev) => ({ ...prev, branchID: "Select branch" }));
+      showAdminErrorToast("Please select a branch.");
+      return;
+    }
+
+    const valueDate = buildValueDateISO();
+    if (!valueDate) {
+      showAdminErrorToast("Please enter a valid value date.");
+      return;
+    }
+
+    const payload = {
+      userID,
+      entryDate: new Date().toISOString(),
+      valueDate,
+      branchID: Number(branchID),
+      journalDetails: entries.map((entry) => ({
+        ledgerID: Number(entry.ledgerID),
+        debit: entry.type === "Debit" ? Number(entry.amount) : 0,
+        credit: entry.type === "Credit" ? Number(entry.amount) : 0,
+        reference: entry.reference,
+        customerID: txnType === "Customer" ? Number(entry.customerID) : null,
+      })),
     };
 
-    const journalDetails = entries.map((entry) => ({
-      ledgerID: entry.ledgerID,
-      debit: entry.type === "Debit" ? entry.amount : 0,
-      credit: entry.type === "Credit" ? entry.amount : 0,
-      reference: entry.reference,
-    }));
+    if (txnType === "Customer") {
+      const hasMissingCustomerID = payload.journalDetails.some(
+        (detail) => !detail.customerID || Number(detail.customerID) <= 0
+      );
 
-    console.log("Saving voucher:", { journal, journalDetails });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+      if (hasMissingCustomerID) {
+        showAdminErrorToast("Customer ID is required for Customer transaction type.");
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
+    setSaved(false);
+
+    try {
+      const response = await accountingApi.createJournalEntry(payload);
+      const message =
+        (typeof response === "object" && response?.message) ||
+        (typeof response === "string" && response) ||
+        "Journal inserted successfully";
+
+      showAdminSuccessToast(message);
+      setSaved(true);
+      setEntries([]);
+      setErrors({});
+      setTimeout(() => setSaved(false), 3000);
+    } catch (error) {
+      showAdminErrorToast(error?.message || "Failed to save journal entry.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
-    <div className={`${nunito.className} flex min-h-screen flex-col items-center bg-slate-50 px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8 text-slate-800`}>
+    <div className={`${nunito.className} flex min-h-screen flex-col items-center bg-slate-200 px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8 text-slate-800`}>
       <div className="mb-6 sm:mb-8 flex w-full max-w-[1100px] flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
         <div>
           <div className="text-lg sm:text-xl md:text-[22px] font-semibold uppercase tracking-[0.08em] text-slate-900">
@@ -147,16 +306,21 @@ export default function GLVoucherEntry() {
           <div className="w-full sm:min-w-[200px] sm:flex-1">
             <label className={labelBase}>Office / Branch</label>
             <select
-              value={office}
-              onChange={(event) => setOffice(event.target.value)}
-              className={`${inputBase} cursor-pointer appearance-none text-xs sm:text-sm`}
+              value={branchID}
+              onChange={(event) => {
+                setBranchID(event.target.value);
+                setErrors((previous) => ({ ...previous, branchID: undefined }));
+              }}
+              className={`${inputBase} cursor-pointer appearance-none text-xs sm:text-sm ${errors.branchID ? "border-rose-500" : "border-slate-200"}`}
             >
-              {offices.map((entry) => (
-                <option key={entry} value={entry}>
-                  {entry}
+              <option value="">Select branch...</option>
+              {branchOptions.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.name}
                 </option>
               ))}
             </select>
+            {errors.branchID && <span className="mt-1 block text-[11px] text-rose-600">{errors.branchID}</span>}
           </div>
 
           <div className="w-full sm:w-auto sm:shrink-0">
@@ -166,7 +330,14 @@ export default function GLVoucherEntry() {
                 <button
                   key={type}
                   type="button"
-                  onClick={() => setTxnType(type)}
+                  onClick={() => {
+                    setTxnType(type);
+                    setErrors((previous) => ({ ...previous, customerID: undefined }));
+
+                    if (type !== "Customer") {
+                      setCustomerID("");
+                    }
+                  }}
                   className={`${pillButtonBase} flex-1 sm:flex-initial text-xs sm:text-[13px] ${
                     txnType === type
                       ? "border-amber-500 bg-amber-500 text-white shadow-sm"
@@ -197,8 +368,8 @@ export default function GLVoucherEntry() {
                   errors.glHead ? "border-rose-500" : "border-slate-200"
                 } ${glHead ? "text-slate-800" : "text-slate-500"}`}
               >
-                <option value="">Select GL Head...</option>
-                {glHeads.map((entry) => (
+                <option value="">{isLoadingOptions ? "Loading GL Heads..." : "Select GL Head..."}</option>
+                {glHeadOptions.map((entry) => (
                   <option key={entry.id} value={entry.id}>
                     {entry.name}
                   </option>
@@ -228,6 +399,23 @@ export default function GLVoucherEntry() {
                 ))}
               </div>
             </div>
+
+            {txnType === "Customer" && (
+              <div className="w-full min-w-[220px] sm:max-w-[400px] sm:flex-[0_1_160px] lg:flex-[0_1_220px]">
+                <label className={labelBase}>Customer ID *</label>
+                <input
+                  type="number"
+                  value={customerID}
+                  onChange={(event) => {
+                    setCustomerID(event.target.value);
+                    setErrors((previous) => ({ ...previous, customerID: undefined }));
+                  }}
+                  placeholder="0"
+                  className={`${inputBase} text-xs sm:text-sm ${errors.customerID ? "border-rose-500" : "border-slate-200"}`}
+                />
+                {errors.customerID && <span className="mt-1 block text-[11px] text-rose-600">{errors.customerID}</span>}
+              </div>
+            )}
 
             <div className="w-full min-w-[220px] sm:max-w-[400px] sm:flex-[0_1_160px] lg:flex-[0_1_300px]">
               <label className={labelBase}>Amount</label>
@@ -339,15 +527,15 @@ export default function GLVoucherEntry() {
                   <td colSpan={2} className="px-3 sm:px-5 py-2 sm:py-3 text-[9px] sm:text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">
                     Total
                   </td>
-                  <td className={`px-3 sm:px-5 py-2 sm:py-3 text-right text-[11px] sm:text-[14px] font-semibold tabular-nums ${totalDebit === totalCredit ? "text-emerald-600" : "text-rose-600"}`}>
+                  <td className={`px-3 sm:px-5 py-2 sm:py-3 text-right text-[11px] sm:text-[14px] font-semibold tabular-nums ${balanced ? "text-emerald-600" : "text-rose-600"}`}>
                     {totalDebit.toLocaleString()}
                   </td>
-                  <td className={`px-3 sm:px-5 py-2 sm:py-3 text-right text-[11px] sm:text-[14px] font-semibold tabular-nums ${totalDebit === totalCredit ? "text-emerald-600" : "text-rose-600"}`}>
+                  <td className={`px-3 sm:px-5 py-2 sm:py-3 text-right text-[11px] sm:text-[14px] font-semibold tabular-nums ${balanced ? "text-emerald-600" : "text-rose-600"}`}>
                     {totalCredit.toLocaleString()}
                   </td>
                   <td className="hidden sm:table-cell px-5 py-3">
-                    <span className={`text-[11px] font-semibold ${totalDebit === totalCredit ? "text-emerald-600" : "text-rose-600"}`}>
-                      {totalDebit === totalCredit ? "✓ Balanced" : `Diff: ${Math.abs(totalDebit - totalCredit).toLocaleString()}`}
+                    <span className={`text-[11px] font-semibold ${balanced ? "text-emerald-600" : "text-rose-600"}`}>
+                      {balanced ? "✓ Balanced" : `Diff: ${balanceDifference.toLocaleString()}`}
                     </span>
                   </td>
                 </tr>
@@ -358,6 +546,15 @@ export default function GLVoucherEntry() {
       </div>
 
       <div className="flex w-full max-w-[1100px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-end sm:gap-4">
+        {apiLoadError && (
+          <span className="text-xs text-rose-600">⚠ {apiLoadError}</span>
+        )}
+        {!isLoadingOptions && branchOptions.length === 0 && (
+          <span className="text-xs text-rose-600">⚠ No branches available</span>
+        )}
+        {!isLoadingOptions && glHeadOptions.length === 0 && (
+          <span className="text-xs text-rose-600">⚠ No GL heads available</span>
+        )}
         {!balanced && entries.length > 0 && (
           <span className="text-xs text-rose-600">⚠ Debit and Credit must balance before saving</span>
         )}
@@ -365,14 +562,14 @@ export default function GLVoucherEntry() {
         <button
           type="button"
           onClick={saveVoucher}
-          disabled={!balanced}
+          disabled={!balanced || isSubmitting || isLoadingOptions || branchOptions.length === 0 || glHeadOptions.length === 0}
           className={`w-full sm:w-auto rounded-lg border-0 px-6 sm:px-9 py-3 text-xs sm:text-[13px] font-semibold tracking-[0.04em] transition ${
-            balanced
+            balanced && !isSubmitting && !isLoadingOptions && branchOptions.length > 0 && glHeadOptions.length > 0
               ? "cursor-pointer bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-sm hover:brightness-105"
-              : "cursor-not-allowed bg-slate-200 text-slate-500"
+              : "cursor-not-allowed bg-slate-400 text-slate-800"
           }`}
         >
-          Save Voucher
+          {isSubmitting ? "Saving..." : "Save Voucher"}
         </button>
       </div>
     </div>

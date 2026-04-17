@@ -653,11 +653,93 @@ export const accountingApi = {
     });
   },
 
-  
+  createJournalEntry: async (payload = {}) => {
+    const entryDate = payload.entryDate || new Date().toISOString();
+    const valueDate = payload.valueDate || entryDate;
+    const details = Array.isArray(payload.journalDetails) ? payload.journalDetails : [];
+
+    const body = {
+      userID: String(payload.userID || '').trim(),
+      entryDate,
+      valueDate,
+      branchID: toNumber(payload.branchID),
+      journalDetails: details.map((detail) => ({
+        ledgerID: toNumber(detail?.ledgerID),
+        debit: toNumber(detail?.debit),
+        credit: toNumber(detail?.credit),
+        reference: String(detail?.reference || '').trim(),
+        customerID:
+          detail?.customerID === undefined || detail?.customerID === null || detail?.customerID === ''
+            ? null
+            : toNumber(detail?.customerID),
+      })),
+    };
+
+    return await request('/Accounting/Journal', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  voucherQuery: async (payload = {}) => {
+    const body = {};
+
+    if (payload.journalID !== undefined && payload.journalID !== null && payload.journalID !== '') {
+      const journalID = toNumber(payload.journalID, -1);
+      if (journalID > 0) {
+        body.journalID = journalID;
+      }
+    }
+
+    if (payload.fromDate !== undefined && payload.fromDate !== null && payload.fromDate !== '') {
+      body.fromDate = String(payload.fromDate);
+    }
+
+    if (payload.toDate !== undefined && payload.toDate !== null && payload.toDate !== '') {
+      body.toDate = String(payload.toDate);
+    }
+
+    try {
+      const response = await request('/Accounting/VoucherQuery', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+
+      return Array.isArray(response) ? response : [];
+    } catch (error) {
+      if (error?.status === 404) {
+        return [];
+      }
+
+      throw error;
+    }
+  },
+
+  verifyJournal: async (payload = {}) => {
+    const body = {
+      journalID: toNumber(payload.journalID),
+    };
+
+    const verifiedValue = payload.verified ?? payload.status;
+    if (verifiedValue !== undefined && verifiedValue !== null && verifiedValue !== '') {
+      body.verified = toNumber(verifiedValue);
+    }
+
+    if (payload.verifiedBy !== undefined && payload.verifiedBy !== null && payload.verifiedBy !== '') {
+      body.verifiedBy = String(payload.verifiedBy).trim();
+    }
+
+    return await request('/Accounting/VerifyJournal', {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  },
+
+
 };
 
 export const commonApi = {
-  checkDuplicate:async (payload = {}) => {
+  checkDuplicate: async (payload = {}) => {
     const body = {
       tableName: String(payload.tableName || '').trim(),
       columnName: String(payload.columnName || '').trim(),
