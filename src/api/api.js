@@ -756,3 +756,32 @@ export const commonApi = {
     });
   },
 }
+
+export const contactApi = {
+  sendUserMessage: async (payload = {}) => {
+    const body = {
+      name: String(payload.name || '').trim(),
+      email: String(payload.email || '').trim(),
+      phone: String(payload.phone || '').trim(),
+      company: String(payload.company || '').trim(),
+      subject: String(payload.subject || '').trim(),
+      message: String(payload.message || '').trim(),
+    };
+
+    return await request('/Contact/user-message', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  getOfficeContact: async () => {
+    try {
+      return await request('/Contact/office-contact');
+    } catch (err) {
+      if (err?.status === 404) {
+        return null;
+      }
+      throw err;
+    }
+  },
+}
