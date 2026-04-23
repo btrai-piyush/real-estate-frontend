@@ -2,12 +2,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navItems = [
-	{ label: "Home", href: "/home", hasDropdown: false },
-	{ label: "Listing", href: "/home/listing", hasDropdown: false },
-	{ label: "Property", href: "/home/property", hasDropdown: false },
-	{ label: "Pages", href: "/home/pages", hasDropdown: true },
-	{ label: "Blog", href: "/home/blog", hasDropdown: false },
-	{ label: "Contact", href: "/home/contact", hasDropdown: false },
+	{ label: "Home", href: "/home/", hasDropdown: false },
+	{ label: "Listing", href: "/home/listing/", hasDropdown: false },
+	// { label: "Property", href: "/home/property", hasDropdown: false },
+	// { label: "Pages", href: "/home/pages", hasDropdown: true },
+	// { label: "Blog", href: "/home/blog", hasDropdown: false },
+	{ label: "Contact", href: "/home/contact/", hasDropdown: false },
 ];
 
 function ChevronDown({ className = "" }) {
@@ -31,6 +31,7 @@ function ChevronDown({ className = "" }) {
 
 export default function NavLinks({ mobile = false, onNavigate }) {
 	const pathname = usePathname();
+	const normalizedPathname = pathname === "/" ? "/" : pathname.replace(/\/+$/, "");
 
 	return (
 		<ul
@@ -41,9 +42,10 @@ export default function NavLinks({ mobile = false, onNavigate }) {
 			}
 		>
 			{navItems.map((item) => {
-				const isActive = item.href === "/home"
-					? pathname === item.href
-					: pathname === item.href || pathname.startsWith(`${item.href}/`);
+				const normalizedHref = item.href === "/" ? "/" : item.href.replace(/\/+$/, "");
+				const isActive = normalizedHref === "/home"
+					? normalizedPathname === normalizedHref
+					: normalizedPathname === normalizedHref || normalizedPathname.startsWith(`${normalizedHref}/`);
 
 				return (
 					<li key={item.label}>

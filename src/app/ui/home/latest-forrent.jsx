@@ -5,11 +5,12 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import ListingCard from '@/app/ui/listings/listing-card';
 import { propertyApi } from '@/api/api';
 import { ListingGridSkeleton } from '@/app/ui/skeletons';
+import { getRuntimeConfig } from "@/app/lib/runtime-config";
 
 const MAX_ITEMS = 12;
 const FALLBACK_COVER_IMAGE =
 	'https://www.publicdomainpictures.net/pictures/100000/velka/new-home-for-sale-1405784329d8m.jpg';
-const PROPERTY_IMAGE_BASE_URL = 'https://localhost:7018/api/uploads/property_images';
+const getPropertyImageBaseUrl = () => getRuntimeConfig('PROPERTY_IMAGE_BASE_URL')?.trim();
 const DEFAULT_AGENT_AVATAR =
 	'https://media.istockphoto.com/id/1495088043/vector/user-profile-icon-avatar-or-person-icon-profile-picture-portrait-symbol-default-portrait.jpg?s=612x612&w=is&k=20&c=XmEKmysBRbA1o6zWBHLRaX2j_nrYVvdVZjuXPBLuOOo=';
 
@@ -63,7 +64,12 @@ const getListingImageUrl = (property) => {
 		return coverValue;
 	}
 
-	return `${PROPERTY_IMAGE_BASE_URL}/${coverValue}`;
+	const propertyImageBaseUrl = getPropertyImageBaseUrl();
+	if (propertyImageBaseUrl) {
+		return `${propertyImageBaseUrl}/${coverValue}`;
+	}
+
+	return FALLBACK_COVER_IMAGE;
 };
 
 export default function LatestForRent() {

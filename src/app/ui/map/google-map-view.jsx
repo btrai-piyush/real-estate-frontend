@@ -3,12 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GoogleMap, useJsApiLoader } from '@react-google-maps/api';
 import { useSelector } from 'react-redux';
+import { getRuntimeConfig } from "@/app/lib/runtime-config";
 
 const FALLBACK_CENTER = { lat: 27.7172, lng: 85.3240 };
 const MAP_LOADER_ID = 'google-map-script';
 const MAP_LIBRARIES = ['marker'];
-const MAP_ID = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID || '';
-const MAP_IDS = MAP_ID ? [MAP_ID] : [];
 
 const isValidCoordinate = (lat, lng) => (
     Number.isFinite(lat) &&
@@ -35,11 +34,14 @@ const normalizeLocation = (location) => {
 };
 
 function GoogleMapLoader({ apiKey, selectedPosition, onLocationSelect }) {
+    const mapId = getRuntimeConfig("NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID") || '';
+    const mapIds = mapId ? [mapId] : [];
+
     const { isLoaded } = useJsApiLoader({
         id: MAP_LOADER_ID,
         googleMapsApiKey: apiKey,
         libraries: MAP_LIBRARIES,
-        mapIds: MAP_IDS,
+        mapIds,
     });
     const userLocation = useSelector((state) => state.app.location);
     const [map, setMap] = useState(null);
@@ -112,7 +114,7 @@ function GoogleMapLoader({ apiKey, selectedPosition, onLocationSelect }) {
             onLoad={(loadedMap) => setMap(loadedMap)}
             onUnmount={() => setMap(null)}
             options={{
-                mapId: MAP_ID || undefined,
+                mapId: mapId || undefined,
                 streetViewControl: false,
                 mapTypeControl: false,
                 fullscreenControl: false,
@@ -122,7 +124,7 @@ function GoogleMapLoader({ apiKey, selectedPosition, onLocationSelect }) {
 }
 
 function GoogleMapView({ selectedPosition = null, onLocationSelect, apiKey: apiKeyProp }) {
-    const apiKey = apiKeyProp ?? process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
+    const apiKey = apiKeyProp ?? getRuntimeConfig("NEXT_PUBLIC_GOOGLE_MAPS_API_KEY") ?? "";
 
     if (!apiKey) {
         return (

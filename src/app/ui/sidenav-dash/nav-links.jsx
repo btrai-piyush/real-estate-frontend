@@ -8,38 +8,35 @@ import {
   EnvelopeIcon,
   GiftTopIcon,
   UserIcon,
-  ArrowLeftStartOnRectangleIcon,
   HomeIcon,
-  ChatBubbleLeftRightIcon,
-  MagnifyingGlassIcon,
 } from "@heroicons/react/24/outline";
 
 const navItemsMain = [
-  { label: "Dashboard", icon: Squares2X2Icon, href: "/admin/dashboard", hasDropdown: false },
-  { label: "Create Listing", icon: PlusIcon, href: "/admin/create-listing", hasDropdown: false },
-  { label: "Message", icon: EnvelopeIcon, href: "/admin/message", hasDropdown: false },
+  { label: "Dashboard", icon: Squares2X2Icon, href: "/admin/dashboard/", hasDropdown: false },
+  { label: "Create Listing", icon: PlusIcon, href: "/admin/create-listing/", hasDropdown: false },
+  { label: "Message", icon: EnvelopeIcon, href: "/admin/messages/", hasDropdown: false },
 ];
 
 const navItemsManageListings = [
-  { label: "My Properties", icon: HomeIcon, href: "/admin/my-properties", hasDropdown: false },
-  { label: "Reviews", icon: ChatBubbleLeftRightIcon, href: "/admin/reviews", hasDropdown: true },
-  { label: "My Favorites", icon: MagnifyingGlassIcon, href: "/admin/favorites", hasDropdown: false },
-  { label: "Saved Search", icon: MagnifyingGlassIcon, href: "/admin/saved-search", hasDropdown: false },
+  { label: "My Properties", icon: HomeIcon, href: "/admin/my-properties/", hasDropdown: false },
+  // { label: "Reviews", icon: ChatBubbleLeftRightIcon, href: "/admin/reviews", hasDropdown: true },
+  // { label: "My Favorites", icon: MagnifyingGlassIcon, href: "/admin/favorites", hasDropdown: false },
+  // { label: "Saved Search", icon: MagnifyingGlassIcon, href: "/admin/saved-search", hasDropdown: false },
 ];
 
 const navItemsManageAccount = [
-  { label: "My Package", icon: GiftTopIcon, href: "/admin/package", hasDropdown: false },
-  { label: "My Profile", icon: UserIcon, href: "/admin/my-profile", hasDropdown: false },
-  { label: "Logout", icon: ArrowLeftStartOnRectangleIcon, href: "/admin/logout", hasDropdown: false },
+  // { label: "My Package", icon: GiftTopIcon, href: "/admin/package", hasDropdown: false },
+  { label: "My Profile", icon: UserIcon, href: "/admin/my-profile/", hasDropdown: false },
+  // { label: "Logout", icon: ArrowLeftStartOnRectangleIcon, href: "/admin/logout", hasDropdown: false },
 ];
 
 const navItemsAccounting=[
-{ label: "Manage Branches", icon: GiftTopIcon, href: "/admin/manage-branches", hasDropdown: false },
-{ label: "Master Group ", icon: UserIcon, href: "/admin/master-group", hasDropdown: false },
-{ label: "GL Group", icon: UserIcon, href: "/admin/gl-group", hasDropdown: false },
-{ label: "GL Head", icon: UserIcon, href: "/admin/gl-head", hasDropdown: false },
-{label: "Journal Entry", icon: UserIcon, href: "/admin/journal-entry", hasDropdown: false },
-{label: "Voucher Verification", icon: UserIcon, href: "/admin/voucher-verification", hasDropdown: false },
+{ label: "Manage Branches", icon: GiftTopIcon, href: "/admin/manage-branches/", hasDropdown: false },
+{ label: "Master Group ", icon: UserIcon, href: "/admin/master-group/", hasDropdown: false },
+{ label: "GL Group", icon: UserIcon, href: "/admin/gl-group/", hasDropdown: false },
+{ label: "GL Head", icon: UserIcon, href: "/admin/gl-head/", hasDropdown: false },
+{label: "Journal Entry", icon: UserIcon, href: "/admin/journal-entry/", hasDropdown: false },
+{label: "Voucher Verification", icon: UserIcon, href: "/admin/voucher-verification/", hasDropdown: false },
 ];
 
 function ChevronDown({ className = "" }) {
@@ -63,14 +60,16 @@ function ChevronDown({ className = "" }) {
 
 function SectionLinks({ items, onNavigate }) {
   const pathname = usePathname();
+  const normalizedPathname = pathname === "/" ? "/" : pathname.replace(/\/+$/, "");
 
   return (
     <ul>
       {items.map((item) => {
         const Icon = item.icon;
+        const normalizedHref = item.href === "/" ? "/" : item.href.replace(/\/+$/, "");
         const isActive =
           item.href !== "#" &&
-          (pathname === item.href || pathname.startsWith(`${item.href}/`));
+          (normalizedPathname === normalizedHref || normalizedPathname.startsWith(`${normalizedHref}/`));
 
         return (
           <li key={item.label}>
