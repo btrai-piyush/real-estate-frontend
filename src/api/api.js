@@ -1,9 +1,17 @@
-// const BASE_URL =
-//   process.env.NEXT_PUBLIC_BASE_URL ||
-//   process.env.NEXT_PUBLIC_BASE_PATH ||
-//   '/api';
+import { getRuntimeConfig } from "@/app/lib/runtime-config";
 
-const BASE_URL = "https://localhost:7018/api";
+const resolveBaseUrl = (baseUrl) => {
+  if (typeof baseUrl === 'string' && baseUrl.trim()) {
+    return baseUrl.trim();
+  }
+
+  const runtimeBaseUrl = getRuntimeConfig('API_BASE_URL');
+  if (typeof runtimeBaseUrl === 'string' && runtimeBaseUrl.trim()) {
+    return runtimeBaseUrl.trim();
+  }
+
+  return '';
+};
 
 const AUTH_SESSION_EXPIRED_EVENT = 'auth:session-expired';
 const REFRESH_ENDPOINT = '/Auth/refresh-token';
@@ -81,7 +89,7 @@ function buildLoginPayload(body) {
   return payload;
 }
 
-async function request(path, options = {}, baseUrl = BASE_URL) {
+async function request(path, options = {}, baseUrl) {
   return requestWithAuthRetry(path, options, baseUrl, { skipAuthRetry: false });
 }
 
@@ -91,7 +99,7 @@ function notifySessionExpired() {
   window.dispatchEvent(new CustomEvent(AUTH_SESSION_EXPIRED_EVENT));
 }
 
-async function requestWithAuthRetry(path, options = {}, baseUrl = BASE_URL, config = {}) {
+async function requestWithAuthRetry(path, options = {}, baseUrl, config = {}) {
   const { skipAuthRetry = false } = config;
 
   try {
@@ -119,7 +127,9 @@ async function requestWithAuthRetry(path, options = {}, baseUrl = BASE_URL, conf
   }
 }
 
-async function rawRequest(path, options = {}, baseUrl = BASE_URL) {
+async function rawRequest(path, options = {}, baseUrl) {
+  const resolvedBaseUrl = resolveBaseUrl(baseUrl);
+  const requestUrl = `${resolvedBaseUrl}${path}`;
   const hasFormDataBody = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers = {
     ...(options.body && !hasFormDataBody ? { 'Content-Type': 'application/json' } : {}),
@@ -127,7 +137,7 @@ async function rawRequest(path, options = {}, baseUrl = BASE_URL) {
   };
 
   try {
-    const res = await fetch(`${baseUrl}${path}`, {
+    const res = await fetch(requestUrl, {
       ...options,
       headers,
       credentials: 'include',
@@ -172,7 +182,7 @@ async function rawRequest(path, options = {}, baseUrl = BASE_URL) {
 }
 
 async function authRequest(path, options = {}, config = {}) {
-  return requestWithAuthRetry(path, options, BASE_URL, config);
+  return requestWithAuthRetry(path, options, undefined, config);
 }
 
 async function refreshAccessToken() {
@@ -772,6 +782,17 @@ export const contactApi = {
       method: 'POST',
       body: JSON.stringify(body),
     });
+  },
+
+  getMessages: async () => {
+    try {
+      return await request('/Contact/messages');
+    } catch (err) {
+      if (err?.status === 404) {
+        return [];
+      }
+      throw err;
+    }
   },
 
   getOfficeContact: async () => {

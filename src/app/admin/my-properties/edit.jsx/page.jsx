@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import PropertyForm from "@/app/ui/admin/property-form";
 import { propertyApi } from "@/api/api";
 import { useAuth } from "@/context/AuthContext";
 import { nunito } from "@/app/ui/fonts";
 import { showAdminErrorToast, showAdminSuccessToast } from "@/app/lib/admin-toast";
+import { getRuntimeConfig } from "@/app/lib/runtime-config";
 
-const IMAGE_BASE_URL = "https://localhost:7018/api/uploads/property_images";
+const getPropertyImageBaseUrl = () => getRuntimeConfig("PROPERTY_IMAGE_BASE_URL")?.trim();
 
 const buildCoverImageUrl = (coverPhoto) => {
 	if (!coverPhoto || coverPhoto === "no-image-available") {
@@ -19,7 +20,8 @@ const buildCoverImageUrl = (coverPhoto) => {
 		return coverPhoto;
 	}
 
-	return `${IMAGE_BASE_URL}/${coverPhoto}`;
+	const propertyImageBaseUrl = getPropertyImageBaseUrl();
+	return propertyImageBaseUrl ? `${propertyImageBaseUrl}/${coverPhoto}` : null;
 };
 
 const toBoolean = (value) => {
@@ -40,7 +42,21 @@ const unwrapProperty = (response) => {
 	return response?.data || response?.result || response?.item || response || null;
 };
 
-export default function EditPropertyPage() {
+const EditPropertyPageFallback = () => (
+	<div className={nunito.className + " min-h-screen bg-slate-50 px-4 py-10"}>
+		<div className="mx-auto flex w-full max-w-5xl flex-col gap-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+			<div className="h-8 w-56 animate-pulse rounded bg-slate-200" />
+			<div className="grid gap-4 md:grid-cols-2">
+				<div className="h-12 animate-pulse rounded bg-slate-200" />
+				<div className="h-12 animate-pulse rounded bg-slate-200" />
+				<div className="h-12 animate-pulse rounded bg-slate-200" />
+				<div className="h-12 animate-pulse rounded bg-slate-200" />
+			</div>
+		</div>
+	</div>
+);
+
+function EditPropertyPageContent() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const { user } = useAuth();
@@ -463,5 +479,13 @@ export default function EditPropertyPage() {
 				/>
 			</div>
 		</div>
+	);
+}
+
+export default function EditPropertyPage() {
+	return (
+		<Suspense fallback={<EditPropertyPageFallback />}>
+			<EditPropertyPageContent />
+		</Suspense>
 	);
 }

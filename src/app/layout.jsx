@@ -8,6 +8,7 @@ import store from "@/app/redux/store";
 import { nunito } from "@/app/ui/fonts";
 import { useEffect } from "react";
 import { setUserLocation as setReduxUserLocation } from "@/app/redux/app/appSlice";
+import Script  from "next/script";
 import Toast from "@/app/ui/toast-container";
 
 
@@ -44,6 +45,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${nunito.className} antialiased`}>
+        <Script src="/constants.js" strategy="beforeInteractive" />
         <Provider store={store}>
           <AuthProvider>
             <Toast />

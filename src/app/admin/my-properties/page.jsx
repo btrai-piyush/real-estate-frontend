@@ -21,11 +21,13 @@ import {
     toggleAdminFeaturedByIds,
     toggleAdminListingStatusByIds,
 } from "@/app/redux/property/propertySlice";
+import { getRuntimeConfig } from "@/app/lib/runtime-config";
 
 const SEARCH_DEBOUNCE_MS = 1000;
 const ADMIN_FETCH_PAGE_SIZE = "1000";
 const COVER_FALLBACK_IMAGE =
     "https://www.publicdomainpictures.net/pictures/100000/velka/new-home-for-sale-1405784329d8m.jpg";
+const getPropertyImageBaseUrl = () => getRuntimeConfig("PROPERTY_IMAGE_BASE_URL")?.trim();
 
 const FILTER_OPTIONS = ["Recent", "Featured First", "Active", "Pending"];
 
@@ -92,7 +94,12 @@ const getCoverImageUrl = (coverPhoto) => {
         return coverValue;
     }
 
-    return `https://localhost:7018/api/uploads/property_images/${coverValue}`;
+    const propertyImageBaseUrl = getPropertyImageBaseUrl();
+    if (propertyImageBaseUrl) {
+        return `${propertyImageBaseUrl}/${coverValue}`;
+    }
+
+    return COVER_FALLBACK_IMAGE;
 };
 
 const normalizeProperty = (property, index) => {

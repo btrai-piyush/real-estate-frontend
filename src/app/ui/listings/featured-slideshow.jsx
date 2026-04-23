@@ -2,13 +2,15 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { propertyApi } from "@/api/api";
 import { nunito } from "../fonts";
+import { getRuntimeConfig } from "@/app/lib/runtime-config";
 
 
 const FEATURED_FALLBACK_IMAGE =
   "https://www.publicdomainpictures.net/pictures/100000/velka/new-home-for-sale-1405784329d8m.jpg";
-const PROPERTY_IMAGE_BASE_URL = "https://localhost:7018/api/uploads/property_images";
+const getPropertyImageBaseUrl = () => getRuntimeConfig("PROPERTY_IMAGE_BASE_URL")?.trim();
 
 const normalizeFeaturedProperties = (response) => {
+  const propertyImageBaseUrl = getPropertyImageBaseUrl();
   const rawList = Array.isArray(response) ? response : response ? [response] : [];
 
   return rawList.map((property, index) => {
@@ -19,7 +21,9 @@ const normalizeFeaturedProperties = (response) => {
       ? FEATURED_FALLBACK_IMAGE
       : coverPhoto.startsWith("http://") || coverPhoto.startsWith("https://")
         ? coverPhoto
-        : `${PROPERTY_IMAGE_BASE_URL}/${coverPhoto}`;
+        : propertyImageBaseUrl
+          ? `${propertyImageBaseUrl}/${coverPhoto}`
+          : FEATURED_FALLBACK_IMAGE;
 
     return {
       id: property.id || `featured-${index}`,

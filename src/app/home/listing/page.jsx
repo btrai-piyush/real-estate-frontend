@@ -1,7 +1,7 @@
 'use client';
 
 import ListingCard from "@/app/ui/listings/listing-card";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { ListFilter, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
@@ -23,10 +23,33 @@ import FeaturedSlideshow from "@/app/ui/listings/featured-slideshow";
 import ListingsPagination from "@/app/ui/listings/listings-pagination";
 import { ListingGridSkeleton } from "@/app/ui/skeletons";
 import { nunito } from "@/app/ui/fonts";
+import { getRuntimeConfig } from "@/app/lib/runtime-config";
 
 const PAGE_SIZE = 10;
 const FALLBACK_COVER_IMAGE= "https://www.publicdomainpictures.net/pictures/100000/velka/new-home-for-sale-1405784329d8m.jpg";
-const PROPERTY_IMAGE_BASE_URL = "https://localhost:7018/api/uploads/property_images";
+
+const getPropertyImageBaseUrl = () => getRuntimeConfig("PROPERTY_IMAGE_BASE_URL")?.trim();
+
+const ListingsPageFallback = () => (
+    <div className={nunito.className + " min-h-screen overflow-x-hidden bg-gradient-to-b from-gray-100 to-[#edf2f7]"}>
+        <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+            <section className="mb-6 rounded-lg bg-white/80 p-5 shadow-sm ring-1 ring-slate-200/70 backdrop-blur-sm sm:p-6">
+                <div className="h-8 w-56 animate-pulse rounded bg-slate-200" />
+                <div className="mt-3 h-4 w-full max-w-2xl animate-pulse rounded bg-slate-200" />
+                <div className="mt-3 h-4 w-44 animate-pulse rounded bg-slate-200" />
+            </section>
+
+            <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
+                <div className="hidden h-[420px] rounded-2xl bg-white/80 shadow-sm ring-1 ring-slate-200/70 lg:block" />
+                <div className="space-y-4">
+                    <div className="h-40 rounded-2xl bg-white/80 shadow-sm ring-1 ring-slate-200/70" />
+                    <div className="h-40 rounded-2xl bg-white/80 shadow-sm ring-1 ring-slate-200/70" />
+                    <div className="h-40 rounded-2xl bg-white/80 shadow-sm ring-1 ring-slate-200/70" />
+                </div>
+            </div>
+        </main>
+    </div>
+);
 
 const formatPostedAt = (dateValue) => {
     if (!dateValue) {
@@ -82,7 +105,12 @@ const getListingImageUrl = (property) => {
         return coverValue;
     }
 
-    return `${PROPERTY_IMAGE_BASE_URL}/${coverValue}`;
+    const propertyImageBaseUrl = getPropertyImageBaseUrl();
+    if (propertyImageBaseUrl) {
+        return `${propertyImageBaseUrl}/${coverValue}`;
+    }
+
+    return FALLBACK_COVER_IMAGE;
 };
 
 const parsePriceRange = (range) => {
@@ -109,7 +137,7 @@ const parsePriceRange = (range) => {
     };
 };
 
-export default function ListingsPage() {
+function ListingsPageContent() {
     const searchParams = useSearchParams();
     const [isMobileSidebarMounted, setIsMobileSidebarMounted] = useState(false);
     const [isMobileSidebarVisible, setIsMobileSidebarVisible] = useState(false);
@@ -461,5 +489,13 @@ export default function ListingsPage() {
             )
             }
         </div >
+    );
+}
+
+export default function ListingsPage() {
+    return (
+        <Suspense fallback={<ListingsPageFallback />}>
+            <ListingsPageContent />
+        </Suspense>
     );
 }
