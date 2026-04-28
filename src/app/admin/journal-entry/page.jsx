@@ -263,7 +263,7 @@ export default function GLVoucherEntry() {
   }
 
   return (
-    <div className={`${nunito.className} flex min-h-screen flex-col items-center bg-slate-200 px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8 text-slate-800`}>
+    <div className={`${nunito.className} flex min-h-screen flex-col items-center bg-slate-100 px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8 text-slate-800`}>
       <div className="mb-6 sm:mb-8 flex w-full max-w-[1100px] flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
         <div>
           <div className="text-lg sm:text-xl md:text-[22px] font-semibold uppercase tracking-[0.08em] text-slate-900">
@@ -566,7 +566,7 @@ export default function GLVoucherEntry() {
           className={`w-full sm:w-auto rounded-lg border-0 px-6 sm:px-9 py-3 text-xs sm:text-[13px] font-semibold tracking-[0.04em] transition ${
             balanced && !isSubmitting && !isLoadingOptions && branchOptions.length > 0 && glHeadOptions.length > 0
               ? "cursor-pointer bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-sm hover:brightness-105"
-              : "cursor-not-allowed bg-slate-400 text-slate-800"
+              : "cursor-not-allowed bg-slate-300 text-white"
           }`}
         >
           {isSubmitting ? "Saving..." : "Save Voucher"}

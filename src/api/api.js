@@ -694,6 +694,9 @@ export const accountingApi = {
   voucherQuery: async (payload = {}) => {
     const body = {};
 
+    const pageNumber = Math.max(toNumber(payload.pageNumber, 1), 1);
+    body.pageNumber = pageNumber;
+
     if (payload.journalID !== undefined && payload.journalID !== null && payload.journalID !== '') {
       const journalID = toNumber(payload.journalID, -1);
       if (journalID > 0) {
@@ -715,10 +718,20 @@ export const accountingApi = {
         body: JSON.stringify(body),
       });
 
-      return Array.isArray(response) ? response : [];
+      const items = Array.isArray(response)
+        ? response
+        : Array.isArray(response?.data)
+          ? response.data
+          : Array.isArray(response?.items)
+            ? response.items
+            : [];
+
+      const totalCount = extractTotalCount(response, items.length);
+
+      return { items, totalCount };
     } catch (error) {
       if (error?.status === 404) {
-        return [];
+        return { items: [], totalCount: 0 };
       }
 
       throw error;
@@ -767,6 +780,156 @@ export const commonApi = {
   },
 }
 
+function looksLikeContactMessage(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+
+  const keys = new Set(Object.keys(value).map((key) => String(key).toLowerCase()));
+  const identityKeys = ['name', 'email', 'phone', 'company', 'subject'];
+
+  const identityScore = identityKeys.reduce((count, key) => count + (keys.has(key) ? 1 : 0), 0);
+  return identityScore >= 2 || (keys.has('name') && keys.has('message'));
+}
+
+function parseJsonIfString(value) {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function extractContactMessages(payload) {
+  const queue = [parseJsonIfString(payload)];
+  const visited = new Set();
+
+  while (queue.length > 0) {
+    const current = parseJsonIfString(queue.shift());
+    if (!current || typeof current !== 'object') {
+      continue;
+    }
+
+    if (Array.isArray(current)) {
+      if (current.some(looksLikeContactMessage)) {
+        return current;
+      }
+
+      for (const item of current) {
+        if (item && (typeof item === 'object' || typeof item === 'string')) {
+          queue.push(item);
+        }
+      }
+
+      continue;
+    }
+
+    if (visited.has(current)) {
+      continue;
+    }
+    visited.add(current);
+
+    if (looksLikeContactMessage(current)) {
+      return [current];
+    }
+
+    const prioritizedKeys = ['data', 'items', 'messages', 'result', 'results', 'value', '$values', 'payload', 'content'];
+    for (const key of prioritizedKeys) {
+      if (key in current) {
+        queue.push(current[key]);
+      }
+    }
+
+    for (const nestedValue of Object.values(current)) {
+      if (nestedValue && (typeof nestedValue === 'object' || typeof nestedValue === 'string')) {
+        queue.push(nestedValue);
+      }
+    }
+  }
+
+  return [];
+}
+
+function normalizeContactMessage(value, index) {
+  const message = value && typeof value === 'object' ? value : {};
+  const resolvedId = pickFirstDefined(message.id, message.ID, message.messageId, message.MessageId, index + 1);
+
+  return {
+    id: resolvedId,
+    name: String(pickFirstDefined(message.name, message.Name, 'Unknown Sender')),
+    email: String(pickFirstDefined(message.email, message.Email, '')),
+    phone: String(pickFirstDefined(message.phone, message.Phone, '')),
+    company: String(pickFirstDefined(message.company, message.Company, 'General')),
+    subject: String(pickFirstDefined(message.subject, message.Subject, '(No subject)')),
+    message: String(pickFirstDefined(message.message, message.Message, '')),
+    readStatus: normalizeBoolean(pickFirstDefined(message.readStatus, message.ReadStatus), false),
+    createdOn: pickFirstDefined(
+      message.AddedOn,
+      message.addedOn,
+      message.createdOn,
+      message.createdAt,
+      message.creationDate,
+      message.CreatedOn,
+      message.CreatedAt,
+      message.CreationDate,
+      message.date,
+      message.Date,
+      null,
+    ),
+  };
+}
+
+function extractTotalCount(payload, fallback = 0) {
+  if (!payload) return fallback;
+
+  const directCount = pickFirstDefined(payload.totalCount, payload.TotalCount, payload.count, payload.Count);
+  const numericDirect = Number(directCount);
+  if (Number.isFinite(numericDirect) && numericDirect >= 0) {
+    return numericDirect;
+  }
+
+  if (Array.isArray(payload) && payload.length > 0) {
+    const arrayCount = pickFirstDefined(
+      payload[0]?.totalCount,
+      payload[0]?.TotalCount,
+      payload[0]?.count,
+      payload[0]?.Count,
+    );
+    const numericArray = Number(arrayCount);
+    if (Number.isFinite(numericArray) && numericArray >= 0) {
+      return numericArray;
+    }
+  }
+
+  return fallback;
+}
+
+function serializeMessageIds(messageIds) {
+  const values = Array.isArray(messageIds) ? messageIds : [messageIds];
+  const seen = new Set();
+  const normalized = [];
+
+  for (const id of values) {
+    if (id === undefined || id === null) {
+      continue;
+    }
+
+    const token = String(id).trim();
+    if (!token || seen.has(token)) {
+      continue;
+    }
+
+    seen.add(token);
+    normalized.push(token);
+  }
+
+  return normalized.join(',');
+}
+
 export const contactApi = {
   sendUserMessage: async (payload = {}) => {
     const body = {
@@ -784,12 +947,18 @@ export const contactApi = {
     });
   },
 
-  getMessages: async () => {
+  getMessages: async (pageNumber = 1) => {
     try {
-      return await request('/Contact/messages');
+      const pageValue = Math.max(toNumber(pageNumber, 1), 1);
+      const response = await request(`/Contact/messages?pageNumber=${pageValue}`);
+      const extractedMessages = extractContactMessages(response);
+      const items = extractedMessages.map((message, index) => normalizeContactMessage(message, index));
+      const totalCount = extractTotalCount(response, items.length);
+
+      return { items, totalCount };
     } catch (err) {
       if (err?.status === 404) {
-        return [];
+        return { items: [], totalCount: 0 };
       }
       throw err;
     }
@@ -804,5 +973,32 @@ export const contactApi = {
       }
       throw err;
     }
+  },
+
+  toggleReadStatus: async (messageIds) => {
+    const payload = serializeMessageIds(messageIds);
+
+    return await request('/Contact/toggle-read-status', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  markAllRead: async (messageIds) => {
+    const payload = serializeMessageIds(messageIds);
+
+    return await request('/Contact/mark-all-read', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  deleteMessages: async (messageIds) => {
+    const payload = serializeMessageIds(messageIds);
+
+    return await request('/Contact/messages', {
+      method: 'DELETE',
+      body: JSON.stringify(payload),
+    });
   },
 }

@@ -5,6 +5,7 @@ import appReducer from "./app/appSlice";
 import authReducer from "./auth/authSlice";
 import propertyReducer from "./property/propertySlice";
 import accountingReducer from "./accounting/accountingSlice";
+import messagesReducer from "./messages/messagesSlice";
 
 const store = configureStore({
   reducer: {
@@ -14,6 +15,7 @@ const store = configureStore({
     property: propertyReducer,
     auth: authReducer,
     accounting: accountingReducer,
+    messages: messagesReducer,
   },
 });
 

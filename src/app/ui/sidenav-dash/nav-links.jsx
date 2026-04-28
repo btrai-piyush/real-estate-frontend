@@ -14,7 +14,7 @@ import {
 const navItemsMain = [
   { label: "Dashboard", icon: Squares2X2Icon, href: "/admin/dashboard/", hasDropdown: false },
   { label: "Create Listing", icon: PlusIcon, href: "/admin/create-listing/", hasDropdown: false },
-  { label: "Message", icon: EnvelopeIcon, href: "/admin/messages/", hasDropdown: false },
+  { label: "Messages", icon: EnvelopeIcon, href: "/admin/messages/", hasDropdown: false },
 ];
 
 const navItemsManageListings = [

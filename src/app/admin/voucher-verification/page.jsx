@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { accountingApi } from '@/api/api';
 import { showAdminErrorToast, showAdminSuccessToast } from '@/app/lib/admin-toast';
-import { Search, CalendarDays, IdCardLanyard } from 'lucide-react';
+import { Search, CalendarDays, IdCardLanyard, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from "@/context/AuthContext";
 
 function formatNumber(num) {
@@ -252,6 +252,10 @@ export default function VoucherVerificationPage() {
   const [vouchers, setVouchers] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [queryError, setQueryError] = useState('');
+  const PAGE_SIZE = 10;
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [lastQuery, setLastQuery] = useState({});
 
   const [searchMode, setSearchMode] = useState('id');
   const [searchText, setSearchText] = useState('');
@@ -285,17 +289,33 @@ export default function VoucherVerificationPage() {
     return await accountingApi.verifyJournal({ journalID, status: statusValue, verifiedBy: verifiedById });
   };
 
-  const runVoucherQuery = useCallback(async ({ journalID, fromDate, toDate }) => {
+  const runVoucherQuery = useCallback(async ({ journalID, fromDate, toDate, pageNumber = 1 }) => {
     setIsLoading(true);
     setQueryError('');
+    setCurrentPage(pageNumber);
+    setLastQuery({ journalID, fromDate, toDate });
 
     try {
-      const rows = await accountingApi.voucherQuery({ journalID, fromDate, toDate });
-      setVouchers(normalizeVoucherRows(rows));
+      const response = await accountingApi.voucherQuery({ journalID, fromDate, toDate, pageNumber });
+      const rows = Array.isArray(response)
+        ? response
+        : Array.isArray(response?.items)
+          ? response.items
+          : Array.isArray(response?.data)
+            ? response.data
+            : [];
+      const normalized = normalizeVoucherRows(rows);
+      const resolvedTotalCount = Number(
+        response?.totalCount ?? response?.TotalCount ?? rows?.[0]?.totalCount ?? normalized.length
+      ) || 0;
+
+      setVouchers(normalized);
+      setTotalCount(resolvedTotalCount);
     } catch (error) {
       const message = error?.message || 'Failed to load vouchers.';
       setQueryError(message);
       setVouchers([]);
+      setTotalCount(0);
       showAdminErrorToast(message);
     } finally {
       setIsLoading(false);
@@ -303,7 +323,7 @@ export default function VoucherVerificationPage() {
   }, []);
 
   useEffect(() => {
-    runVoucherQuery({});
+    runVoucherQuery({ pageNumber: 1 });
   }, [runVoucherQuery]);
 
   const handleStatusChange = async (id, nextStatus) => {
@@ -360,6 +380,7 @@ export default function VoucherVerificationPage() {
 
       await runVoucherQuery({
         journalID: voucherID,
+        pageNumber: 1,
       });
       return;
     }
@@ -374,6 +395,7 @@ export default function VoucherVerificationPage() {
       await runVoucherQuery({
         fromDate: typedDateRange.fromDate,
         toDate: typedDateRange.toDate,
+        pageNumber: 1,
       });
       return;
     }
@@ -386,6 +408,7 @@ export default function VoucherVerificationPage() {
     await runVoucherQuery({
       fromDate: range.fromDate,
       toDate: range.toDate,
+      pageNumber: 1,
     });
   };
 
@@ -398,12 +421,22 @@ export default function VoucherVerificationPage() {
     await runVoucherQuery({
       fromDate: range.fromDate,
       toDate: range.toDate,
+      pageNumber: 1,
     });
   };
 
+  const totalPages = Math.max(Math.ceil(totalCount / PAGE_SIZE), 1);
+  const rangeStart = totalCount > 0 ? (currentPage - 1) * PAGE_SIZE + 1 : 0;
+  const rangeEnd = totalCount > 0 ? Math.min(rangeStart + PAGE_SIZE - 1, totalCount) : 0;
+
+  const handlePageChange = (nextPage) => {
+    if (nextPage < 1 || nextPage > totalPages || nextPage === currentPage) return;
+    void runVoucherQuery({ ...lastQuery, pageNumber: nextPage });
+  };
+
   return (
-    <div className="min-h-screen bg-gray-200">
-      <div className="min-h-screen 2xl:max-w-8/10 mx-auto bg-gray-200 p-4 md:p-8">
+    <div className="min-h-screen bg-slate-100">
+      <div className="min-h-screen 2xl:max-w-8/10 mx-auto bg-slate-100 p-4 md:p-8">
         <div className="mb-6 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600 text-white">
             <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -566,8 +599,34 @@ export default function VoucherVerificationPage() {
           </div>
         </div>
 
-        <div className="mt-4 text-right text-xs text-gray-400">
-          Showing {vouchers.length} voucher(s)
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500">
+          <span>
+            Showing {rangeStart}-{rangeEnd} of {totalCount} journal(s)
+          </span>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={isLoading || currentPage <= 1}
+              className="flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label="Previous page"
+              title="Previous page"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="text-xs font-medium text-gray-600">Page {currentPage} of {totalPages}</span>
+            <button
+              type="button"
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={isLoading || currentPage >= totalPages}
+              className="flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label="Next page"
+              title="Next page"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
       </div>
     </div>
